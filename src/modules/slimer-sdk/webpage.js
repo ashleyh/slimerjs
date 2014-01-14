@@ -1423,6 +1423,72 @@ function _create(parentWebpageInfo) {
         },
 
         render: function(filename, options) {
+            if (/\.pdf$/i.exec(filename)) {
+                return this._renderPdf(filename, options);
+            } else {
+                return this._renderImage(filename, options);
+            }
+        },
+
+        _renderPdf: function(filename, options) {
+            if (!browser) {
+                throw new Error("WebPage not opened");
+            }
+
+            let file = fs.absolute(filename);
+
+            let printSettings = Cc["@mozilla.org/gfx/printsettings-service;1"].getService(Ci.nsIPrintSettingsService)
+                                                                              .newPrintSettings;
+
+            printSettings.printSilent = true;
+            printSettings.showPrintProgress = false;
+            printSettings.printBGImages = true;
+            printSettings.printBGColors = true;
+            printSettings.printToFile = true;
+            printSettings.toFileName = file;
+            printSettings.printFrameType = Ci.nsIPrintSettings.kFramesAsIs;
+            printSettings.outputFormat = Ci.nsIPrintSettings.kOutputFormatPDF;
+
+            printSettings.footerStrCenter = "";
+            printSettings.footerStrLeft = "";
+            printSettings.footerStrRight = "";
+            printSettings.headerStrCenter = "";
+            printSettings.headerStrLeft = "";
+            printSettings.headerStrRight = "";
+
+            let webBrowserPrint = browser.contentWindow
+                                         .QueryInterface(Ci.nsIInterfaceRequestor)
+                                         .getInterface(Ci.nsIWebBrowserPrint);
+
+            let done = false;
+
+            let listener = {
+                QueryInterface: function(aIID) {
+                    if (aIID.equals(Ci.nsIWebProgressListener) ||
+                        aIID.equals(Ci.nsISupportsWeakReference) ||
+                        aIID.equals(Ci.nsISupports)) {
+                        return this;
+                    } else {
+                        throw Cr.NS_NOINTERFACE;
+                    }
+                },
+                onStateChange: function(aWebProgress, aRequest, aStateFlags, aStatus) {
+                  if (aStateFlags & Ci.nsIWebProgressListener.STATE_STOP) {
+                      done = true;
+                  }
+                },
+            };
+
+            webBrowserPrint.print(printSettings, listener);
+
+            let thread = Services.tm.currentThread;
+
+            while (!done) {
+                thread.processNextEvent(true);
+            }
+        },
+
+        _renderImage: function(filename, options) {
             if (!browser)
                 throw new Error("WebPage not opened");
 
